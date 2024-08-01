@@ -37,8 +37,14 @@ android {
 
 dependencies {
 
-    // koin
+    // Core do Koin
+    implementation(libs.koin.core)
+    // Koin para Android
     implementation(libs.koin.android)
+    // Koin AndroidX ViewModel features
+    implementation(libs.koin.androidx.workmanager)
+    // Koin AndroidX Compat
+    implementation(libs.koin.android.compat)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

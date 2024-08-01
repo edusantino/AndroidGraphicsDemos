@@ -1,12 +1,9 @@
 package com.santino.mytechdemos.components
 
-import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
-import com.santino.filereader.ShaderFileReader
+import com.santino.filereader.ShaderReader
 import com.santino.mytechdemos.R
-import com.santino.mytechdemos.engine.PhysicsEngine
-import com.santino.mytechdemos.engine.PhysicsSquare
 import org.koin.java.KoinJavaComponent.inject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -14,66 +11,112 @@ import java.nio.FloatBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
-class MyGLRenderer(val context: Context) : GLSurfaceView.Renderer {
+class MyGLRenderer : GLSurfaceView.Renderer {
 
-    private val shaderReader: ShaderFileReader by inject(ShaderFileReader::class.java)
+    private val shaderReader: ShaderReader by inject(ShaderReader::class.java)
 
     private var program: Int = 0
-    private val physicsEngine = PhysicsEngine()
-    private var lastFrameTime: Long = System.currentTimeMillis()
+    private var positionHandle: Int = 0
+    private var texCoordHandle: Int = 0
+    private var vertexBuffer: FloatBuffer
+    private var texCoordBuffer: FloatBuffer
+    private var timeHandle: Int = 0
+
+    private val vertexStride: Int = 4 * 4 // 4 bytes per vertex (x, y, z, w)
+
+    init {
+        val vertices = floatArrayOf(
+            -1.0f,  1.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 1.0f,
+            1.0f, -1.0f, 0.0f, 1.0f,
+            1.0f,  1.0f, 0.0f, 1.0f
+        )
+
+        val texCoords = floatArrayOf(
+            0.0f, 1.0f,
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f
+        )
+
+        vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
+                put(vertices)
+                position(0)
+            }
+
+        texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
+                put(texCoords)
+                position(0)
+            }
+    }
 
     override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
 
-        val (vertexShaderCode, fragmentShaderCode) = shaderReader
-            .readShaderFileFromRawResource(context, R.raw.myshader)
+        val (vertexShaderCode, fragmentShaderCode) = shaderReader.readFile(R.raw.blinkingshader) ?: Pair("", "")
 
-        val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
-        val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
-        program = GLES20.glCreateProgram().apply {
-            GLES20.glAttachShader(this, vertexShader)
-            GLES20.glAttachShader(this, fragmentShader)
-            GLES20.glLinkProgram(this)
-        }
+        program = createProgram(vertexShaderCode, fragmentShaderCode)
 
-        PhysicsSquare.program = program
-
-        // Adiciona um objeto físico
-        val square = PhysicsSquare(0f, 1f, 0.1f)
-        physicsEngine.addObject(square)
-
-        lastFrameTime = System.currentTimeMillis()
+        positionHandle = GLES20.glGetAttribLocation(program, "vPosition")
+        texCoordHandle = GLES20.glGetAttribLocation(program, "aTexCoord")
+        timeHandle = GLES20.glGetUniformLocation(program, "u_time")
     }
 
     override fun onDrawFrame(unused: GL10?) {
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         GLES20.glUseProgram(program)
 
-        val currentTime = System.currentTimeMillis()
-        val deltaTime = (currentTime - lastFrameTime) / 1000.0f
-        lastFrameTime = currentTime
+        val time = (System.currentTimeMillis() % 10000L) / 1000.0f
+        GLES20.glUniform1f(timeHandle, time)
 
-        physicsEngine.update(deltaTime)
-        physicsEngine.draw()
+        GLES20.glEnableVertexAttribArray(positionHandle)
+        GLES20.glVertexAttribPointer(positionHandle, 4, GLES20.GL_FLOAT, false, vertexStride, vertexBuffer)
+
+        GLES20.glEnableVertexAttribArray(texCoordHandle)
+        GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texCoordBuffer)
+
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, 4)
+
+        GLES20.glDisableVertexAttribArray(positionHandle)
+        GLES20.glDisableVertexAttribArray(texCoordHandle)
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
     }
 
+    private fun createProgram(vertexShaderCode: String, fragmentShaderCode: String): Int {
+        val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
+        val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
+
+        return GLES20.glCreateProgram().also { program ->
+            GLES20.glAttachShader(program, vertexShader)
+            GLES20.glAttachShader(program, fragmentShader)
+            GLES20.glLinkProgram(program)
+
+            val linked = IntArray(1)
+            GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linked, 0)
+            if (linked[0] == 0) {
+                val error = GLES20.glGetProgramInfoLog(program)
+                GLES20.glDeleteProgram(program)
+                throw RuntimeException("Error linking program: $error")
+            }
+        }
+    }
+
     private fun loadShader(type: Int, shaderCode: String): Int {
         return GLES20.glCreateShader(type).also { shader ->
             GLES20.glShaderSource(shader, shaderCode)
             GLES20.glCompileShader(shader)
-        }
-    }
 
-    private fun FloatArray.toBuffer(): FloatBuffer {
-        return ByteBuffer.allocateDirect(this.size * 4).run {
-            order(ByteOrder.nativeOrder())
-            asFloatBuffer().apply {
-                put(this@toBuffer)
-                position(0)
+            val compiled = IntArray(1)
+            GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0)
+            if (compiled[0] == 0) {
+                val error = GLES20.glGetShaderInfoLog(shader)
+                GLES20.glDeleteShader(shader)
+                throw RuntimeException("Error compiling shader of type $type: $error")
             }
         }
     }
