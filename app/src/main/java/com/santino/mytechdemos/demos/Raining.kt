@@ -13,13 +13,11 @@ class Raining(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs), Choreographer.FrameCallback {
+    var counter: Int = 0
     var rainingIntensity = 3
-    var posY = 0.0f
-
-    private val paint = Paint().apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-    }
+    var timer = 100L
+    val spawnInterval = 100L
+    val drops: MutableList<Drop> = mutableListOf()
 
     init {
         // Start animation loop
@@ -29,21 +27,17 @@ class Raining(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        /*for (d in drops) {
-            canvas.drawLines()
-        }*/
+        timer -= System.currentTimeMillis()
+        if (timer < 0) {
+            timer = spawnInterval
+            drops.add(Drop(posX = nextDouble(0.0, width.toDouble())))
+        }
 
-        // Update position
-        posY += 5 // Move 5px per frame
-
-        // Draw circle
-        val radius = 100f
-        val cx = width / 2f
-        canvas.drawCircle(cx, posY, radius, paint)
-
-        // Check if circle is out of boundaries
-        if (posY - radius > height) {
-            posY = -radius
+        for (d in drops) {
+            d.updatePos(height) {
+                //drops.remove(d)
+            }
+            canvas.drawLine(d.posX.toFloat(), d.posY, d.posX.toFloat(), (d.posY + d.dropTailSize), d.paint)
         }
     }
 
@@ -56,11 +50,23 @@ class Raining(
     }
 }
 
-class Drop {
-    val dropFallSpeed: Float = 3.0f
+class Drop(
+    val posX: Double = 0.0,
+    val fallSpeed: Float = 5.0f
+) {
     val dropTailSize: Float = 3.0f
-    val dropColor = Color.WHITE
     val fallDirection: Float = 30.0f
     var posY: Float = 0.0f
-    val posX: Double = nextDouble(0.0, 10.0)
+
+    val paint = Paint().apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+
+    fun updatePos(height: Int, onReachBoard: () -> Unit) {
+        if (posY < height) {
+            onReachBoard.invoke()
+        }
+        posY += fallSpeed
+    }
 }
