@@ -21,6 +21,10 @@ class MyGLRenderer : GLSurfaceView.Renderer {
     private var vertexBuffer: FloatBuffer
     private var texCoordBuffer: FloatBuffer
     private var timeHandle: Int = 0
+    private var resolutionHandle: Int = 0
+
+    private var surfaceWidth: Int = 0
+    private var surfaceHeight: Int = 0
 
     private val vertexStride: Int = 4 * 4 // 4 bytes per vertex (x, y, z, w)
 
@@ -55,10 +59,11 @@ class MyGLRenderer : GLSurfaceView.Renderer {
     override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
 
-        val (vertexShaderCode, fragmentShaderCode) = shaderReader.readFile(R.raw.blinkingshader) ?: Pair("", "")
+        val (vertexShaderCode, fragmentShaderCode) = shaderReader.readFile(R.raw.normalshader) ?: Pair("", "")
 
         program = createProgram(vertexShaderCode, fragmentShaderCode)
 
+        resolutionHandle = GLES20.glGetUniformLocation(program, "u_resolution")
         positionHandle = GLES20.glGetAttribLocation(program, "vPosition")
         texCoordHandle = GLES20.glGetAttribLocation(program, "aTexCoord")
         timeHandle = GLES20.glGetUniformLocation(program, "u_time")
@@ -70,6 +75,8 @@ class MyGLRenderer : GLSurfaceView.Renderer {
 
         val time = (System.currentTimeMillis() % 10000L) / 1000.0f
         GLES20.glUniform1f(timeHandle, time)
+
+        GLES20.glUniform2f(resolutionHandle, surfaceWidth.toFloat(), surfaceHeight.toFloat())
 
         GLES20.glEnableVertexAttribArray(positionHandle)
         GLES20.glVertexAttribPointer(positionHandle, 4, GLES20.GL_FLOAT, false, vertexStride, vertexBuffer)
@@ -85,6 +92,9 @@ class MyGLRenderer : GLSurfaceView.Renderer {
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
+
+        surfaceWidth = width
+        surfaceHeight = height
     }
 
     private fun createProgram(vertexShaderCode: String, fragmentShaderCode: String): Int {
