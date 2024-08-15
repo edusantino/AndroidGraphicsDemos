@@ -33,6 +33,9 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    viewBinding {
+        enable = true
+    }
 }
 
 dependencies {
@@ -53,6 +56,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(project(":io:filereader"))
     implementation(project(":engine:graphics"))
+    implementation(libs.androidx.navigation.fragment)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
